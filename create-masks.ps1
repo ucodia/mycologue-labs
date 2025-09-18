@@ -36,10 +36,9 @@ $jpgs | ForEach-Object -Parallel {
     $args += @(
       $_.FullName,
       "-colorspace","Gray",
-      "-blur","0x1",
-      "-auto-level",
+      "-blur","0x4",
       "-threshold","4%",
-      "-define","connected-components:keep-top=2",
+      "-define","connected-components:keep-top=1",
       "-connected-components","8",
       "-type","bilevel",
       $outPath
