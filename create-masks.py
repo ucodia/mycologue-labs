@@ -80,39 +80,39 @@ def process_image(args: Tuple[Path, Optional[Path], bool]) -> Tuple[str, str, st
 )
 def main(input: Path, output: Optional[Path], workers: Optional[int], overwrite: bool):
     """
-    Create mask images from JPG files using ImageMagick.
-    
-    This script processes JPG images to create binary masks using ImageMagick's
+    Create mask images from image files using ImageMagick.
+
+    This script processes image files to create binary masks using ImageMagick's
     connected components analysis to isolate the main subject.
     """
-    jpg_files = [
+    image_files = [
         f for f in input.iterdir() 
         if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg']
     ]
-    jpg_files = sorted(jpg_files)
+    image_files = sorted(image_files)
     
-    if not jpg_files:
-        click.echo("No JPG files found in the specified input directory.", err=True)
+    if not image_files:
+        click.echo("No image files found in the specified input directory.", err=True)
         return
     
-    click.echo(f"Found {len(jpg_files)} JPG file(s) to process")
+    click.echo(f"Found {len(image_files)} image file(s) to process")
     
     output_folder = output if output else input
     click.echo(f"Output folder: {output_folder}")
     
     if workers is None:
-        workers = min(cpu_count(), len(jpg_files))
+        workers = min(cpu_count(), len(image_files))
     
     click.echo(f"Using {workers} worker process(es)")
     
-    process_args = [(jpg_file, output_folder, overwrite) for jpg_file in jpg_files]
+    process_args = [(image_file, output_folder, overwrite) for image_file in image_files]
     
     successful = 0
     skipped = 0
     failed = 0
     
     with Pool(processes=workers) as pool:
-        with tqdm(total=len(jpg_files), desc="Processing images", unit="file") as pbar:
+        with tqdm(total=len(image_files), desc="Processing images", unit="file") as pbar:
             for status, input_file, result in pool.imap(process_image, process_args):
                 if status == 'success':
                     successful += 1
@@ -120,6 +120,7 @@ def main(input: Path, output: Optional[Path], workers: Optional[int], overwrite:
                     skipped += 1
                 else:  # failed
                     failed += 1
+                    click.echo(f"Failed to process {input_file}: {result}", err=True)
         
                 pbar.update(1)
     
