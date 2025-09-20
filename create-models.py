@@ -92,16 +92,16 @@ def main(input: Path, output: Optional[Path], overwrite: bool):
         
         output_files = list(output_dir.glob(f"{project_name}.*"))
         if output_files:
-            logger.info(f"✓ Successfully created {len(output_files)} files")
+            logger.info(f"Successfully created {len(output_files)} files")
         else:
-            logger.info("✗ No files created", err=True)
+            logger.info("No files created", err=True)
             return 1
             
     except subprocess.CalledProcessError as e:
-        logger.error(f"✗ RealityScan failed with code {e.returncode}", err=True)
+        logger.error(f"RealityScan failed with code {e.returncode}", err=True)
         return 1
     except Exception as e:
-        logger.error(f"✗ Error: {e}", err=True)
+        logger.error(f"Error: {e}", err=True)
         return 1
 
 
