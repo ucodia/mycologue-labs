@@ -4,7 +4,9 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 import click
+from logger import setup_logger
 
+logger = setup_logger(__file__)
 
 @click.command()
 @click.option(
@@ -31,7 +33,7 @@ def main(input: Path, output: Optional[Path], overwrite: bool):
     image_files = [f for f in input.iterdir() if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg']]
     
     if not image_files:
-        click.echo("No image files found.", err=True)
+        logger.info("No image files found.", err=True)
         return
     
     input_dir = input.resolve()
@@ -41,12 +43,12 @@ def main(input: Path, output: Optional[Path], overwrite: bool):
     
     project_file = output_dir / f"{project_name}.rsproj"
     if project_file.exists() and not overwrite:
-        click.echo(f"Project file already exists: {project_file}")
-        click.echo("Use --overwrite to recreate the project")
+        logger.info(f"Project file already exists: {project_file}")
+        logger.info("Use --overwrite to recreate the project")
         return
     
-    click.echo(f"Processing {len(image_files)} images from {input_dir}")
-    click.echo(f"Output: {output_dir}")
+    logger.info(f"Processing {len(image_files)} images from {input_dir}")
+    logger.info(f"Output: {output_dir}")
     
     cmd = [
         "C:\\Program Files\\Epic Games\\RealityScan_2.0\\RealityScan.exe",
@@ -89,16 +91,16 @@ def main(input: Path, output: Optional[Path], overwrite: bool):
         
         output_files = list(output_dir.glob(f"{project_name}.*"))
         if output_files:
-            click.echo(f"✓ Successfully created {len(output_files)} files")
+            logger.info(f"✓ Successfully created {len(output_files)} files")
         else:
-            click.echo("✗ No files created", err=True)
+            logger.info("✗ No files created", err=True)
             return 1
             
     except subprocess.CalledProcessError as e:
-        click.echo(f"✗ RealityScan failed with code {e.returncode}", err=True)
+        logger.error(f"✗ RealityScan failed with code {e.returncode}", err=True)
         return 1
     except Exception as e:
-        click.echo(f"✗ Error: {e}", err=True)
+        logger.error(f"✗ Error: {e}", err=True)
         return 1
 
 

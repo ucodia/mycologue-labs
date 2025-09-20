@@ -6,7 +6,9 @@ from multiprocessing import Pool, cpu_count
 from typing import Tuple, Optional
 import click
 from tqdm import tqdm
+from logger import setup_logger
 
+logger = setup_logger(__file__)
 
 def process_image(args: Tuple[Path, Optional[Path], bool]) -> Tuple[str, str, str]:
     """
@@ -92,18 +94,16 @@ def main(input: Path, output: Optional[Path], workers: Optional[int], overwrite:
     image_files = sorted(image_files)
     
     if not image_files:
-        click.echo("No image files found in the specified input directory.", err=True)
+        logger.info("No image files found in the specified input directory.", err=True)
         return
     
-    click.echo(f"Found {len(image_files)} image file(s) to process")
+    logger.info(f"Found {len(image_files)} image file(s) to process")
     
     output_folder = output if output else input
-    click.echo(f"Output folder: {output_folder}")
+    logger.info(f"Output folder: {output_folder}")
     
     if workers is None:
         workers = min(cpu_count(), len(image_files))
-    
-    click.echo(f"Using {workers} worker process(es)")
     
     process_args = [(image_file, output_folder, overwrite) for image_file in image_files]
     
@@ -120,16 +120,16 @@ def main(input: Path, output: Optional[Path], workers: Optional[int], overwrite:
                     skipped += 1
                 else:  # failed
                     failed += 1
-                    click.echo(f"Failed to process {input_file}: {result}", err=True)
+                    logger.error(f"Failed to process {input_file}: {result}", err=True)
         
                 pbar.update(1)
     
-    click.echo(f"\nProcessing complete!")
-    click.echo(f"Successfully processed: {successful} files")
+    logger.info(f"Processing complete")
+    logger.info(f"Processed: {successful} files")
     if skipped > 0:
-        click.echo(f"Skipped (already exists): {skipped} files")
+        logger.info(f"Skipped (already exists): {skipped} files")
     if failed > 0:
-        click.echo(f"Failed to process: {failed} files", err=True)
+        logger.info(f"Failed to process: {failed} files", err=True)
 
 
 if __name__ == "__main__":
