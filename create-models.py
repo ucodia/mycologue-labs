@@ -56,6 +56,7 @@ def main(input: Path, output: Optional[Path], overwrite: bool):
         "-addFolder", str(input_dir),
         "-align",
         "-setReconstructionRegionAuto",
+        "-scaleReconstructionRegion", "1.1", "1.1", "1.1", "center", "factor",
         
         # Texture settings
         "-set", "UnwrapMaxTextureSize=4096",
