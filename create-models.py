@@ -40,6 +40,8 @@ def main(input: Path, output: Optional[Path], overwrite: bool):
     output_dir = output.resolve() if output else input.resolve() / "models"
     output_dir.mkdir(parents=True, exist_ok=True)
     project_name = input.name
+    script_dir = Path(__file__).parent.resolve()
+    export_params_file = script_dir / "rs-params" / "export-params.xml"
     
     project_file = output_dir / f"{project_name}.rsproj"
     if project_file.exists() and not overwrite:
@@ -54,35 +56,37 @@ def main(input: Path, output: Optional[Path], overwrite: bool):
         "C:\\Program Files\\Epic Games\\RealityScan_2.0\\RealityScan.exe",
         "-headless",
         "-addFolder", str(input_dir),
+
+        # General settings
+        "-set", "unwrapMaxTexResolution=4096",
+
+        # Alignment and reconstruction
         "-align",
         "-setReconstructionRegionAuto",
         "-scaleReconstructionRegion", "1.1", "1.1", "1.1", "center", "factor",
         
-        # Texture settings
-        "-set", "UnwrapMaxTextureSize=4096",
-        "-set", "UnwrapMaxChartsCount=0",
-        "-set", "TextureMaxSize=4096",
-        "-set", "TextureFileType=png",
-        "-set", "TextureIsPowerOf2=1",
-        "-set", "TextureIsSquare=1",
-        "-set", "TextureImageFill=1",
-        "-set", "TextureNormalSpace=tangent",
-        "-set", "TextureNormalStyle=DirectX",
-        
-        # Process
-        "-calculateHighModel",
-        "-unwrap",
-        "-calculateTexture",
-        "-simplify", "10000",
+        # Generate base model
+        "-calculateNormalModel",
+        "-renameSelectedModel", "Normal",
         "-smooth",
+        "-renameSelectedModel", "NormalSmooth",
+
+        # Generate 100K model
+        "-selectModel", "NormalSmooth",
+        "-simplify", "100000",
+        "-renameSelectedModel", "Normal100K",
         "-unwrap",
         "-calculateTexture",
+        "-exportSelectedModel", str(output_dir / f"{project_name}.100k.glb"), str(export_params_file),
         
-        # Export - use absolute paths
-        "-exportModel", "Model 1", str(output_dir / f"{project_name}.high.fbx"),
-        "-exportModel", "Model 3", str(output_dir / f"{project_name}.low.fbx"),
-        "-exportModel", "Model 1", str(output_dir / f"{project_name}.high.glb"),
-        "-exportModel", "Model 3", str(output_dir / f"{project_name}.low.glb"),
+        # Generate 10K model
+        "-selectModel", "NormalSmooth",
+        "-simplify", "10000",
+        "-renameSelectedModel", "Normal10K",
+        "-unwrap",
+        "-calculateTexture",
+        "-exportSelectedModel", str(output_dir / f"{project_name}.10k.glb"), str(export_params_file),
+
         "-save", str(output_dir / f"{project_name}.rsproj"),
         "-quit"
     ]
