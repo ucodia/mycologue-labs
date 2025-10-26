@@ -1,71 +1,54 @@
 import bpy, sys, os, math
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 def parse_args():
-    """Parse command line arguments."""
     argv = sys.argv
     argv = argv[argv.index("--")+1:] if "--" in argv else []
-    
-    # Default values
     input_path = None
     output_dir = None
     overwrite = False
-    
+    make_video = False
     i = 0
     while i < len(argv):
-        if argv[i] == "--input" or argv[i] == "-i":
-            if i + 1 < len(argv):
-                input_path = argv[i + 1]
-                i += 2
-            else:
-                raise SystemExit("Error: --input requires a value")
-        elif argv[i] == "--output" or argv[i] == "-o":
-            if i + 1 < len(argv):
-                output_dir = argv[i + 1]
-                i += 2
-            else:
-                raise SystemExit("Error: --output requires a value")
-        elif argv[i] == "--overwrite":
-            overwrite = True
-            i += 1
-        elif argv[i] == "--help" or argv[i] == "-h":
-            print("Usage: blender --background --python create-preview.py -- [options]")
-            print()
-            print("Options:")
-            print("  --input, -i PATH     Input 3D model file (.glb, .gltf, .obj, .fbx)")
-            print("  --output, -o DIR     Output directory for preview image")
-            print("  --overwrite          Overwrite existing preview files")
-            print("  --help, -h           Show this help message")
-            raise SystemExit(0)
+        a = argv[i]
+        if a in ("--input","-i"):
+            if i+1 >= len(argv): raise SystemExit("Error: --input requires a value")
+            input_path = argv[i+1]; i += 2
+        elif a in ("--output","-o"):
+            if i+1 >= len(argv): raise SystemExit("Error: --output requires a value")
+            output_dir = argv[i+1]; i += 2
+        elif a == "--overwrite":
+            overwrite = True; i += 1
+        elif a == "--video":
+            make_video = True; i += 1
+        elif a in ("--help","-h"):
+            print("Usage: blender --background --python create-preview.py -- --input PATH [--output DIR] [--overwrite] [--video]"); raise SystemExit(0)
         else:
-            # Assume it's the input file for backward compatibility
-            if not input_path:
-                input_path = argv[i]
+            if not input_path: input_path = a
             i += 1
-    
-    if not input_path:
-        raise SystemExit("Error: --input is required")
-    
-    return input_path, output_dir, overwrite
+    if not input_path: raise SystemExit("Error: --input is required")
+    return input_path, output_dir, overwrite, make_video
 
-# Parse arguments
-model_path, output_dir, overwrite = parse_args()
+model_path, output_dir, overwrite, make_video = parse_args()
 
-# Determine output path
 if output_dir:
     model_name = os.path.splitext(os.path.basename(model_path))[0]
-    out_path = os.path.join(output_dir, f"{model_name}-preview.png")
+    out_path = os.path.join(output_dir, f"{model_name}-preview.mp4" if make_video else f"{model_name}-preview.png")
 else:
-    out_path = os.path.splitext(model_path)[0] + "-preview.png"
+    out_path = os.path.splitext(model_path)[0] + ("-preview.mp4" if make_video else "-preview.png")
 
-# Check for overwrite early to avoid unnecessary rendering
+out_path = os.path.abspath(out_path)
+os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
 if os.path.exists(out_path) and not overwrite:
     print(f"Preview already exists: {out_path}")
     print("Use --overwrite to recreate the preview")
     raise SystemExit(0)
-
-# Ensure output directory exists
-os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+if os.path.exists(out_path) and overwrite:
+    try:
+        os.remove(out_path)
+    except OSError:
+        pass
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
@@ -90,12 +73,10 @@ def set_socket(bsdf, names, value):
             return
 
 for m in bpy.data.materials:
-    if not m.use_nodes:
-        continue
+    if not m.use_nodes: continue
     nt = m.node_tree
     bsdf = next((n for n in nt.nodes if n.type=="BSDF_PRINCIPLED"), None)
-    if not bsdf:
-        continue
+    if not bsdf: continue
     set_socket(bsdf, ["Metallic"], 0.0)
     set_socket(bsdf, ["Specular","Specular IOR Level"], 0.05)
     set_socket(bsdf, ["Clearcoat"], 0.0)
@@ -106,10 +87,8 @@ for m in bpy.data.materials:
             nt.links.remove(lk)
 
 meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
-if not meshes:
-    raise SystemExit("No mesh objects")
+if not meshes: raise SystemExit("No mesh objects")
 
-from mathutils import Vector
 mins = Vector((float("inf"),)*3); maxs = Vector((float("-inf"),)*3)
 for o in meshes:
     for c in o.bound_box:
@@ -119,6 +98,10 @@ for o in meshes:
 center=(mins+maxs)*0.5
 size=(maxs-mins)
 max_dim=max(size.x,size.y,size.z) or 1.0
+
+for o in meshes:
+    o.matrix_world = Matrix.Translation(-center) @ o.matrix_world
+center = Vector((0.0,0.0,0.0))
 
 bpy.ops.object.camera_add()
 cam=bpy.context.object
@@ -161,10 +144,52 @@ sc.view_settings.view_transform='Standard'
 sc.render.resolution_x=1024
 sc.render.resolution_y=1024
 sc.render.film_transparent=False
-sc.render.image_settings.file_format='PNG'
-sc.render.filepath=out_path
+sc.render.use_file_extension = True
 
-bpy.ops.render.render(write_still=True)
-img=bpy.data.images.get("Render Result")
-if img: img.save_render(out_path)
-print(out_path)
+if "--video" in sys.argv:
+    fps = 30
+    dur = 10
+    rig = bpy.data.objects.new("Rig", None)
+    bpy.context.scene.collection.objects.link(rig)
+    rig.location = center
+    for o in meshes:
+        o.parent = rig
+        o.matrix_parent_inverse = rig.matrix_world.inverted()
+    sc.frame_start = 1
+    sc.frame_end = fps*dur
+    rig.rotation_mode = 'XYZ'
+    rig.rotation_euler = (0.0,0.0,0.0)
+    rig.keyframe_insert(data_path="rotation_euler", frame=sc.frame_start)
+    rig.rotation_euler = (0.0,0.0,math.tau)
+    rig.keyframe_insert(data_path="rotation_euler", frame=sc.frame_end)
+    for fc in rig.animation_data.action.fcurves:
+        for kp in fc.keyframe_points:
+            kp.interpolation = 'LINEAR'
+    amp = max_dim * 0.04   # subtle float amplitude
+    osc_per_rot = 2        # number of up/down cycles per full rotation
+    total_frames = fps * dur
+    d = rig.driver_add("location", 2).driver
+    d.type = 'SCRIPTED'
+    d.expression = f"{amp} * sin(2 * 3.14159 * {osc_per_rot} * frame / {total_frames})"
+    sc.render.image_settings.file_format = 'FFMPEG'
+    sc.render.ffmpeg.format = 'MPEG4'
+    sc.render.ffmpeg.codec = 'H264'
+    sc.render.ffmpeg.constant_rate_factor = 'MEDIUM'
+    sc.render.ffmpeg.gopsize = 12
+    sc.render.ffmpeg.audio_codec = 'AAC'
+    sc.render.fps = fps
+    sc.render.filepath = out_path
+    bpy.ops.render.render(animation=True)
+    if not os.path.exists(out_path):
+        raise SystemExit("MP4 not written")
+    print(out_path)
+else:
+    sc.frame_set(1)
+    sc.render.image_settings.file_format='PNG'
+    sc.render.filepath=out_path
+    bpy.ops.render.render(write_still=True)
+    img=bpy.data.images.get("Render Result")
+    if img: img.save_render(out_path)
+    if not os.path.exists(out_path):
+        raise SystemExit("Image not written")
+    print(out_path)
